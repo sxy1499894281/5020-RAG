@@ -1,0 +1,13 @@
+ijson
+tqdm
+pyyaml
+rank-bm25
+nltk
+chromadb
+faiss-cpu; sys_platform == 'darwin'
+sentence-transformers
+numpy
+pandas
+openai
+jieba
+pytest
