@@ -1,44 +1,43 @@
 ```markdown
-# 从零实现指南 v4（code4 文档，完整版）  
-—— 从 0 搭建 + 实现 project4 中的所有模块与测试流程
+# 从零实现指南（code4 文档，完整版）  
+—— 从 0 搭建 + 实现“多策略增强 RAG 学术问答系统”及完整测试流程
 
 > 使用方式：  
 > - 把本文件当成“从零实现 + 自测 + 消融实验”的总说明。  
 > - 每个模块都有两部分：  
 >   - 先用中文说明“要干什么”；  
 >   - 再给一个可以直接复制到代码文件里的 **Python 伪代码骨架**（函数签名 + 注释 + `pass` / `TODO`）。  
-> - 全流程覆盖：基础 v3 系统 + v4 所有创新模块 + 测试与消融实验命令。
+> - 全流程覆盖：基础 RAG 系统 + 所有增强模块 + 完整测试与消融实验命令。
 
 ---
 
 ## 0. 总体实现顺序（建议）
 
 1. **准备项目结构与环境**
-   - 目录 [5020-RAG/](cci:7://file:///mnt/sdb/dongpeijie/workspace_sxy/5020-RAG:0:0-0:0)；
-   - 安装虚拟环境和依赖（`requirements.txt`）。
+   - 新建目录 [5020-RAG/](cci:7://file:///mnt/sdb/dongpeijie/workspace_sxy/5020-RAG:0:0-0:0)；
+   - 建立虚拟环境，安装 `requirements.txt` 依赖。
 2. **准备配置文件 `configs/config.yaml`**
-   - 路径、模型名、策略开关（包括 v4 的 dynamic_alpha/rerank/expansion 等）。
+   - 统一管理数据路径、索引路径、模型名、检索策略和运行参数。
 3. **实现基础数据与索引模块**
    - `src/ingest.py`：从原始 arXiv JSONL 抽取核心字段 → `clean.jsonl`；
-   - `src/index_bm25.py`：BM25 索引；
-   - `src/index_dense.py`：稠密向量 + Chroma 向量库。
+   - `src/index_bm25.py`：构建 BM25 索引；
+   - `src/index_dense.py`：构建稠密向量索引（Chroma）。
 4. **实现基础检索与 RAG**
-   - `src/retriever.py`：基础 `retrieve`（bm25/dense/hybrid）；
-   - `src/rag.py`：RAG（`answer` + `LLMClient`）。
+   - `src/retriever.py`：基础检索接口 `retrieve`（bm25/dense/hybrid）；
+   - `src/rag.py`：RAG 主流程（`answer` + `LLMClient`）。
 5. **实现合成 QA 与评测**
    - `src/synth_qa.py`：合成问答数据生成；
    - `src/eval.py`：离线评测（Recall/MRR/Latency）。
-6. **实现 v4 创新模块**
-   - `src/heuristics.py`：query 启发式 + dynamic alpha + SLA 策略；
-   - `src/reranker.py`：Cross-Encoder rerank；
+6. **实现增强模块**
+   - `src/heuristics.py`：查询启发式、动态 alpha、SLA 策略；
+   - `src/reranker.py`：Cross-Encoder 重排；
    - `src/expansion.py`：PRF + LLM 查询扩展；
    - `src/snippets.py`：句级 evidence 抽取与高亮；
    - 扩展 `retriever.py` 增加 `retrieve_enhanced`；
    - 扩展 `rag.py` 增加 `enhanced_answer`。
 7. **实现并执行完整测试与消融实验**
-   - 基础功能测试（ingest/index/retriever/rag/synth_qa/eval）；
-   - 每个创新点的开关 + 消融实验命令；
-   - 查看并对比 `logs/*.csv` 指标。
+   - 用 mini 数据和合成 QA 做基础功能测试；
+   - 针对每个增强点做“开/关”消融实验，并用 `logs/*.csv` 对比指标。
 
 ---
 
@@ -57,7 +56,7 @@ pip install -U pip
 
 ### 1.2 `requirements.txt` 建议内容
 
-在项目根目录创建或编辑 `requirements.txt`：
+在项目根目录创建/编辑 `requirements.txt`：
 
 ```text
 pyyaml
@@ -81,10 +80,11 @@ pip install -U -r requirements.txt
 
 ### 2.1 要做什么
 
-- 集中管理数据路径、索引路径、模型名称；
-- 控制检索模式、v4 策略开关、RAG 参数等。
+- 集中管理数据路径、索引路径、模型配置；
+- 控制检索模式和增强模块开关；
+- 配置 RAG 生成、类别策略和延迟预算等参数。
 
-在 `configs/` 目录中创建 `config.yaml`，示例骨架：
+在 `configs/` 中创建 `config.yaml`，示例骨架：
 
 ```yaml
 data:
@@ -103,16 +103,16 @@ dense:
 retrieval:
   mode: hybrid
   topk: 5
-  alpha: 0.5           # v3: 固定 alpha
-  dynamic_alpha: true  # v4: 是否启用自适应 alpha
+  alpha: 0.5           # 初始固定 alpha
+  dynamic_alpha: true  # 是否启用自适应 alpha
   expansion:
-    enable: false      # v4: 查询扩展总开关
+    enable: false      # 查询扩展总开关
     prf:
       enable: true
-      m_docs: 5        # PRF 使用的 top-m 文档数
-      top_terms: 10    # 从 PRF 中选多少高频词
+      m_docs: 5
+      top_terms: 10
     llm:
-      enable: false    # 初期可先关掉 LLM 改写
+      enable: false    # 初期可关掉 LLM 改写
       n_variants: 3
 
 rerank:
@@ -124,8 +124,8 @@ rerank:
 rag:
   use_evidence_snippets: true
   evidence:
-    per_doc: 2         # 每篇文档最多选多少句
-    max_total: 10      # 总共最多多少句
+    per_doc: 2
+    max_total: 10
     method: bm25       # 句级打分方式：bm25 | embedding
 
 generation:
@@ -151,9 +151,9 @@ runtime:
 
 ### 3.1 要做什么
 
-- 从大 JSONL 流式读取；
-- 抽取 `id/title/abstract/categories/created`；
-- 输出为 `clean.jsonl`。
+- 从超大的 arXiv JSONL 流式读取；
+- 解析 JSON，抽取核心字段；
+- 输出精简版 `clean.jsonl`，便于后续索引与检索。
 
 ### 3.2 伪代码骨架
 
@@ -191,7 +191,7 @@ def _clean_abstract(raw: str) -> str:
     """
     # TODO:
     # text = (raw or "").replace("\n", " ")
-    # # 如需，做一些正则清洗
+    # # 如需，可做一些正则清洗
     # return text.strip()
     pass
 
@@ -202,18 +202,17 @@ def stream_clean_arxiv(input_path: str, output_path: str, max_rows: Optional[int
     - max_rows 用于调试，只处理前 N 行。
     """
     # 1. 打开输入/输出文件（encoding="utf-8"）
-    # 2. 用 for i, line in enumerate(f): 逐行读取
+    # 2. for i, line in enumerate(f): 逐行读取
     # 3. 对每一行：
     #    - strip 去掉首尾空白
-    #    - 如果空行则 continue
-    #    - try: obj = json.loads(line)
-    #    - except: continue
-    #    - 从 obj 中取出 id/title/abstract/categories/versions
+    #    - 空行跳过
+    #    - try/except json.loads 防止坏行
+    #    - 抽取 id/title/abstract/categories/versions
     #    - created = _parse_created(versions)
     #    - abstract = _clean_abstract(abstract)
-    #    - new_rec = {"id": ..., "title": ..., "abstract": ..., "categories": ..., "created": created}
-    #    - json.dump(new_rec, out_file, ensure_ascii=False); 写一个换行
-    # 4. 若 max_rows 不为 None，处理到 N 行后 break
+    #    - new_rec = {...}
+    #    - 用 json.dump(new_rec, out_file, ensure_ascii=False) + 换行
+    # 4. 如果 max_rows 非空，处理到 N 行后 break
     pass
 
 
@@ -242,9 +241,9 @@ if __name__ == "__main__":
 ### 4.1 要做什么
 
 - 读 `clean.jsonl`；
-- 构建 BM25 索引；
-- 序列化到 `bm25.idx`；
-- 提供 `search_bm25(index_path, query, topk)`。
+- 构建 BM25 文本索引；
+- 序列化保存到 `bm25.idx`；
+- 提供 `search_bm25` 查询接口。
 
 ### 4.2 伪代码骨架
 
@@ -262,14 +261,14 @@ import pickle
 import re
 from typing import List, Dict
 
-# from rank_bm25 import BM25Okapi  # 真正实现时需要导入
+# from rank_bm25 import BM25Okapi  # 实际使用时导入
 
 
 def _tokenize(text: str) -> List[str]:
     """
-    非常简单的分词函数：
-    - 全部转小写
-    - 用正则把连续的字母/数字当作一个 token
+    简单英文分词：
+    - 转小写
+    - 用正则提取连续字母/数字
     """
     # TODO:
     # text = text.lower()
@@ -280,7 +279,7 @@ def _tokenize(text: str) -> List[str]:
 def build_bm25_index(clean_path: str, index_path: str) -> int:
     """
     从 clean.jsonl 构建 BM25 索引，并保存到 index_path。
-    返回索引中的文档数量。
+    返回文档数量。
     """
     docs: List[Dict] = []
     tokens: List[List[str]] = []
@@ -289,14 +288,12 @@ def build_bm25_index(clean_path: str, index_path: str) -> int:
     # with open(clean_path, "r", encoding="utf-8") as f:
     #     for line in f:
     #         rec = json.loads(line)
-    #         text = (rec.get("title", "") + "\n" + rec.get("abstract", "")).strip()
+    #         text = (rec.get("title","") + "\n" + rec.get("abstract","")).strip()
     #         docs.append({"id": rec["id"], "title": rec["title"], "abstract": rec["abstract"], "text": text})
     #         tokens.append(_tokenize(text))
-    #
     # bm25 = BM25Okapi(tokens)
     # with open(index_path, "wb") as f_out:
     #     pickle.dump({"docs": docs, "tokens": tokens}, f_out)
-    #
     # return len(docs)
     pass
 
@@ -304,7 +301,7 @@ def build_bm25_index(clean_path: str, index_path: str) -> int:
 def search_bm25(index_path: str, query: str, topk: int = 5) -> List[Dict]:
     """
     用 BM25 索引搜索 query，返回 Top-k 结果列表。
-    每条结果包含：id/title/abstract/text/score。
+    每条包含：id/title/abstract/text/score。
     """
     # TODO:
     # with open(index_path, "rb") as f:
@@ -313,7 +310,7 @@ def search_bm25(index_path: str, query: str, topk: int = 5) -> List[Dict]:
     # bm25 = BM25Okapi(tokens)
     # q_tokens = _tokenize(query)
     # scores = bm25.get_scores(q_tokens)
-    # 取分数最高的 topk 索引，组装结果列表
+    # 根据 scores 取前 topk 的索引，组装结果列表
     pass
 
 
@@ -327,8 +324,8 @@ def main():
     parser.add_argument("--index", dest="index_path", required=True)
     args = parser.parse_args()
 
-    # n_docs = build_bm25_index(args.in_path, args.index_path)
-    # print(f"Built BM25 index with {n_docs} docs -> {args.index_path}")
+    # n = build_bm25_index(args.in_path, args.index_path)
+    # print(f"Built BM25 index with {n} docs -> {args.index_path}")
     pass
 
 
@@ -342,10 +339,10 @@ if __name__ == "__main__":
 
 ### 5.1 要做什么
 
-- 从 `clean.jsonl` 读文档；
-- 使用 `SentenceTransformer` 生成向量；
+- 从 `clean.jsonl` 加载文档；
+- 使用 `SentenceTransformer` 编码为向量；
 - 写入 Chroma 持久化向量库；
-- 提供 `search_dense(db_path, query, topk, model_name, collection)`。
+- 提供 `search_dense` 接口。
 
 ### 5.2 伪代码骨架
 
@@ -375,7 +372,7 @@ def _load_docs(clean_path: str) -> List[Dict]:
     # with open(clean_path, "r", encoding="utf-8") as f:
     #     for line in f:
     #         rec = json.loads(line)
-    #         text = (rec.get("title", "") + "\n" + rec.get("abstract", "")).strip()
+    #         text = (rec.get("title","") + "\n" + rec.get("abstract","")).strip()
     #         docs.append({"id": rec["id"], "title": rec["title"], "text": text})
     # return docs
     pass
@@ -393,12 +390,17 @@ def embed_and_build_vector_db(
     返回写入的文档数量。
     """
     # TODO:
-    # 1. client = chromadb.PersistentClient(path=db_path)
-    # 2. 如果 collection 已存在，可删掉重建
-    # 3. docs = _load_docs(clean_path)
-    # 4. model = SentenceTransformer(model_name)
-    # 5. 按 batch_size 切分 docs，循环 encode + col.add(...)
-    # 6. 返回 len(docs)
+    # client = chromadb.PersistentClient(path=db_path)
+    # 如果 collection 已存在可删除再重建
+    # docs = _load_docs(clean_path)
+    # model = SentenceTransformer(model_name)
+    # 按 batch_size 遍历 docs:
+    #   texts = [d["text"] for d in batch]
+    #   emb = model.encode(texts, normalize_embeddings=True)
+    #   ids = [d["id"] for d in batch]
+    #   metas = [{"title": d["title"]} for d in batch]
+    #   collection.add(ids=ids, documents=texts, metadatas=metas, embeddings=emb)
+    # return len(docs)
     pass
 
 
@@ -411,15 +413,15 @@ def search_dense(
 ) -> List[Dict]:
     """
     用稠密向量检索 query，返回 Top-k 文档。
-    每条包含：id/title/text/score（可用 1-距离 作为 score）。
+    每条包含：id/title/text/score（可用 1 - 距离 作为 score）。
     """
     # TODO:
-    # 1. client = chromadb.PersistentClient(path=db_path)
-    # 2. col = client.get_collection(collection)
-    # 3. model = SentenceTransformer(model_name)
-    # 4. q_emb = model.encode([query], normalize_embeddings=True)
-    # 5. col.query(query_embeddings=q_emb, n_results=topk, include=["metadatas","documents","distances"])
-    # 6. 整理结果字段
+    # client = chromadb.PersistentClient(path=db_path)
+    # col = client.get_collection(collection)
+    # model = SentenceTransformer(model_name)
+    # q_emb = model.encode([query], normalize_embeddings=True)
+    # result = col.query(query_embeddings=q_emb, n_results=topk, include=["metadatas","documents","distances"])
+    # 把 ids/documents/metadatas/distances 整理成统一 dict 列表
     pass
 
 
@@ -435,8 +437,8 @@ def main():
     parser.add_argument("--collection", dest="collection", default="arxiv")
     args = parser.parse_args()
 
-    # n_docs = embed_and_build_vector_db(args.in_path, args.db_path, args.model, args.collection)
-    # print(f"Built dense DB with {n_docs} docs -> {args.db_path} [{args.collection}]")
+    # n = embed_and_build_vector_db(args.in_path, args.db_path, args.model, args.collection)
+    # print(f"Built dense DB with {n} docs -> {args.db_path} [{args.collection}]")
     pass
 
 
@@ -446,7 +448,15 @@ if __name__ == "__main__":
 
 ---
 
-## 6. `src/heuristics.py` —— 查询/类别/SLA 启发式（v4 新增）
+## 6. `src/heuristics.py` —— 查询/类别/SLA 启发式
+
+### 6.1 要做什么
+
+- 对 query 提取简单特征并分类（术语型/语义型/混合型），给出建议 `alpha`；
+- 可选：根据 query 粗略预测一个类别前缀（如 `cs.*`）；
+- 根据延迟预算 `latency_budget_ms` 返回一组策略开关。
+
+### 6.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -454,9 +464,9 @@ if __name__ == "__main__":
 heuristics.py
 
 功能：
-- 对 query 做简单特征分析，输出查询类型（term/semantic/mixed）和建议 alpha。
-- 可选：对 query 做粗略类别预测。
-- 根据延迟预算给出策略选择建议（是否启用 rerank / expansion 等）。
+- 对 query 做简单特征分析，输出查询类型和建议 alpha。
+- 可选：对 query 做类别预测。
+- 根据延迟预算给出检索/重排/扩展策略配置。
 """
 
 from typing import Dict, Optional
@@ -474,13 +484,13 @@ def _basic_query_features(q: str) -> Dict:
     # tokens = q.split()
     # num_digits = sum(ch.isdigit() for ch in q)
     # num_punct = sum(ch in ",.;:!?[]" for ch in q)
-    # return {"len_chars": len_chars, "len_tokens": len(tokens), ...}
+    # return {"len_chars": len_chars, "len_tokens": len(tokens), "num_digits": num_digits, "num_punct": num_punct}
     pass
 
 
 def classify_query(q: str) -> Dict:
     """
-    将 query 粗分为 'term' / 'semantic' / 'mixed'，并给出建议 alpha。
+    将 query 粗分为 'term' / 'semantic' / 'mixed' 三类，并给出建议 alpha。
     返回示例：
     {
       "type": "term",
@@ -490,21 +500,20 @@ def classify_query(q: str) -> Dict:
     """
     # TODO:
     # feat = _basic_query_features(q)
-    # 简单规则：
-    # if feat["len_tokens"] <= 4 and (num_digits+num_punct) 比例高 -> term
-    # elif feat["len_tokens"] >= 8 -> semantic
-    # else -> mixed
-    # 然后按类型设定 alpha
+    # 结合长度/数字符号比例等判断类型：
+    # if feat["len_tokens"] <= 4 and (feat["num_digits"]+feat["num_punct"]) 较高 → term
+    # elif feat["len_tokens"] >= 8 → semantic
+    # else → mixed
+    # 根据类型设定 alpha
     pass
 
 
 def predict_query_category(q: str) -> Optional[str]:
     """
-    可选：根据 query 中关键词粗略预测一个 arXiv 类别，比如 "cs.CL"。
-    - 可用简单规则，如包含 'NLP','language model' 等词 → 'cs.CL'
-    - 暂时可以返回 None，后续再完善。
+    可选：根据 query 里的关键词，粗略预测一个类别，比如 "cs.CL"。
+    初期可以简单规则或返回 None。
     """
-    # TODO: 按需实现，初期可直接 return None
+    # TODO: 可先 return None
     pass
 
 
@@ -530,11 +539,15 @@ def choose_strategy(latency_budget_ms: int) -> Dict:
 
 ---
 
-## 7. `src/retriever.py` —— 基础 + v4 增强检索入口
+## 7. `src/retriever.py` —— 基础 + 增强检索入口
 
-> 建议先实现基础 `retrieve`（v3），再在同文件中增加 `_apply_category_logic` + `retrieve_enhanced`（v4）。
+### 7.1 要做什么
 
-### 7.1 伪代码骨架（重点放在增强部分）
+- 实现基础 `retrieve`：支持 `bm25 / dense / hybrid` 三种模式；
+- 实现 `_apply_category_logic`：按类别过滤/加权；
+- 实现 `retrieve_enhanced`：结合 dynamic alpha、query expansion、rerank、类别和 SLA 策略。
+
+### 7.2 伪代码骨架（重点放在增强部分）
 
 ```python
 #!/usr/bin/env python3
@@ -542,8 +555,8 @@ def choose_strategy(latency_budget_ms: int) -> Dict:
 retriever.py
 
 功能：
-- 基础检索接口 retrieve：支持 bm25 / dense / hybrid。
-- v4 增强接口 retrieve_enhanced：支持 dynamic alpha / expansion / rerank / category / SLA。
+- 基础检索接口 retrieve。
+- 增强检索接口 retrieve_enhanced：支持动态 alpha / 查询扩展 / rerank / 类别感知 / SLA。
 """
 
 import argparse
@@ -558,9 +571,7 @@ from typing import List, Dict, Optional
 
 
 def _load_config(path: str) -> Dict:
-    """
-    从 YAML 文件加载配置。
-    """
+    """从 YAML 文件加载配置。"""
     # TODO:
     # with open(path, "r", encoding="utf-8") as f:
     #     return yaml.safe_load(f)
@@ -568,9 +579,7 @@ def _load_config(path: str) -> Dict:
 
 
 def _norm(scores: List[float]) -> List[float]:
-    """
-    min-max 归一化到 0~1。
-    """
+    """min-max 归一化到 0~1。"""
     # TODO:
     # if not scores: return []
     # mn, mx = min(scores), max(scores)
@@ -587,20 +596,20 @@ def retrieve(
     config_path: str = "configs/config.yaml",
 ) -> List[Dict]:
     """
-    基础检索入口（v3 同款）。
+    基础检索入口。
     - mode: "bm25" / "dense" / "hybrid"
-    - hybrid: alpha * dense + (1-alpha) * bm25
+    - hybrid: final_score = alpha * dense_score + (1-alpha) * bm25_score
     """
     # TODO:
     # cfg = _load_config(config_path)
     # bm25_path = cfg["bm25"]["index_path"]
-    # dense_cfg = cfg["dense"]
+    # dcfg = cfg["dense"]
     # if mode == "bm25": return search_bm25(bm25_path, query, topk)
-    # if mode == "dense": return search_dense(dense_cfg["db"], query, topk, dense_cfg["model"], dense_cfg["collection"])
+    # if mode == "dense": return search_dense(dcfg["db"], query, topk, dcfg["model"], dcfg["collection"])
     # if mode == "hybrid":
     #   bm25_res = search_bm25(...)
     #   dense_res = search_dense(...)
-    #   # 合并 & score 归一化 & 融合
+    #   # 归一化两边分数，按 alpha 融合，去重合并
     pass
 
 
@@ -620,10 +629,8 @@ def _apply_category_logic(docs: List[Dict], query_cat: Optional[str], cat_cfg: D
     # if cat_cfg.get("enable_boost") and query_cat:
     #   bf = cat_cfg.get("boost_factor", 0.0)
     #   for d in docs:
-    #       if primary_cat(d).startswith(query_cat.split(".")[0]):  # 简单前缀匹配
-+#
-+    #       d["score"] = d.get("score", 0.0) * (1.0 + bf)
-    #
+    #       if primary_cat(d).startswith(query_cat.split(".")[0]):
+    #           d["score"] = d.get("score", 0.0) * (1.0 + bf)
     # return docs
     pass
 
@@ -642,27 +649,27 @@ def retrieve_enhanced(
     """
     增强版检索入口。
     """
-    # TODO 大致流程：
+    # TODO:
     # 1. cfg = _load_config(config_path)
-    # 2. 如果 latency_budget_ms 不为空：strategy = choose_strategy(latency_budget_ms)
-    #    用 strategy 覆盖 mode/enable_rerank/enable_expansion
-    # 3. 如果 use_dynamic_alpha 且 alpha is None:
-    #       info = classify_query(query)
-    #       alpha = info["alpha"]
+    # 2. 若 latency_budget_ms 不为空：
+    #       strategy = choose_strategy(latency_budget_ms)
+    #       用 strategy 覆盖 mode / enable_rerank / enable_expansion
+    # 3. 若 use_dynamic_alpha 且 alpha is None:
+    #       info = classify_query(query); alpha = info["alpha"]
     # 4. queries = [query]
-    #    如果 enable_expansion：queries = expand_query(query, client=None, ...)
+    #    若 enable_expansion: queries = expand_query(query, client=None, ...)
     # 5. 对每个 q' in queries:
-    #       调用基础检索 retrieve(q', topN, mode, alpha) （topN 可 > topk）
-    #       合并到 {id: doc} 映射，注意 score 的累加或取 max
-    # 6. 把映射转成列表 docs_all
-    # 7. query_cat = predict_query_category(query)
+    #       使用基础 retrieve(q', topN, mode, alpha) 做初排
+    #       将结果合并到 {id: doc} 映射（score 累加或取最大）
+    # 6. 将映射转为列表 docs_all
+    #    query_cat = predict_query_category(query)
     #    docs_all = _apply_category_logic(docs_all, query_cat, cfg["category"])
-    # 8. 如果 enable_rerank:
+    # 7. 若 enable_rerank:
     #       topN = cfg["rerank"]["topn"]
-    #       取 docs_all 的前 topN 调 rerank_docs(query, topN_docs, model_name, topk)
-    #       返回重排结果
+    #       取前 topN 调用 rerank_docs(query, topN_docs, model_name, topk)
+    #       返回 rerank 后结果
     #    否则：
-    #       按 doc["score"] 排序，取前 topk
+    #       按 doc["score"] 排序，取前 topk 返回
     pass
 
 
@@ -694,6 +701,14 @@ if __name__ == "__main__":
 ---
 
 ## 8. `src/reranker.py` —— Cross-Encoder 精排
+
+### 8.1 要做什么
+
+- 加载 CrossEncoder 模型；
+- 对初排结果中的文档与 query 两两组合进行打分；
+- 按新分数重排，产出更精确的 Top-k。
+
+### 8.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -733,7 +748,7 @@ def rerank(
 ) -> List[Dict]:
     """
     对初排 docs 使用 Cross-Encoder 精排，返回 Top-k docs。
-    - docs 每个元素至少包含字段 "text"（或 title+abstract 拼接）。
+    - docs 每个元素至少应有 "text" 字段（或 title+abstract 拼成 text）。
     """
     # TODO:
     # model = load_reranker(model_name)
@@ -748,7 +763,15 @@ def rerank(
 
 ---
 
-## 9. `src/expansion.py` —— 查询扩展（PRF + LLM 改写）
+## 9. `src/expansion.py` —— 查询扩展（PRF + LLM）
+
+### 9.1 要做什么
+
+- 基于 PRF，从初排 Top-M 文档中抽取高频关键词；
+- 使用 LLM 改写 query，生成若干等价问法；
+- 综合构造多种 query 变体，与基础检索结合。
+
+### 9.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -756,7 +779,7 @@ def rerank(
 expansion.py
 
 功能：
-- PRF：基于初排结果的伪相关反馈，提取高频关键词。
+- PRF：从初排结果中做伪相关反馈，提取高频关键词。
 - LLM 改写：调用 LLMClient 将 query 改写为多个等价问法。
 - expand_query：综合上述两种方式，输出一组 query 变体列表。
 """
@@ -774,11 +797,12 @@ def prf_terms(
     top_terms: int = 10,
 ) -> List[str]:
     """
-    使用当前检索后端，对 query 做一次初排，从 top-m 文档统计关键词。
+    使用当前检索后端，对 query 做一次初排，
+    从 top-m 文档中统计关键词，返回若干扩展词。
     """
     # TODO:
-    # 1. 调基础 retrieve(query, topk=m_docs, mode=retriever_cfg["mode"], alpha=...)
-    # 2. 将这些文档的 text 拼在一起，做简单 tokenizer
+    # 1. 用基础 retrieve(query, topk=m_docs, mode=retriever_cfg["mode"], ...) 获取 top-m 文档
+    # 2. 拼接这些文档的 text，做简单分词
     # 3. 统计词频，去掉停用词/过短词，按频率排序
     # 4. 返回前 top_terms 个词
     pass
@@ -790,10 +814,10 @@ def llm_expand(
     n_variants: int = 3,
 ) -> List[str]:
     """
-    使用 LLM 将 query 改写为 n 个等价或更具体的问法。
+    使用 LLM 把 query 改写为 n 个等价或更具体的问法。
     """
     # TODO:
-    # system_prompt = "你是一个检索查询改写助手..."
+    # system_prompt = "你是检索查询改写助手..."
     # user_prompt = f"请基于以下查询生成 {n_variants} 个意思相近的检索问题，每行一个：\n\n{query}"
     # text = client.generate(system_prompt, user_prompt)
     # lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
@@ -812,18 +836,20 @@ def expand_query(
 ) -> List[str]:
     """
     综合 PRF 和 LLM 改写，返回若干 query 变体。
+    返回列表至少包含原始 query 本身。
     """
     # TODO:
     # variants = [query]
     # if use_prf and retriever_cfg is not None:
-    #     terms = prf_terms(query, retriever_cfg, **(prf_cfg or {}))
-    #     if terms:
-    #         expanded_q = query + " " + " ".join(terms[:3])
-    #         variants.append(expanded_q)
+    #   terms = prf_terms(query, retriever_cfg, **(prf_cfg or {}))
+    #   if terms:
+    #       expanded_q = query + " " + " ".join(terms[:3])
+    #       variants.append(expanded_q)
     # if use_llm and client is not None:
-    #     llm_qs = llm_expand(query, client, **(llm_cfg or {}))
-    #     variants.extend(llm_qs)
-    # 去重：variants = list(dict.fromkeys(variants))
+    #   llm_qs = llm_expand(query, client, **(llm_cfg or {}))
+    #   variants.extend(llm_qs)
+    # 去重：
+    # variants = list(dict.fromkeys(variants))
     # return variants
     pass
 ```
@@ -831,6 +857,15 @@ def expand_query(
 ---
 
 ## 10. `src/snippets.py` —— 句级证据抽取
+
+### 10.1 要做什么
+
+- 将文档文本分句；
+- 对每句与 query 计算相关性得分；
+- 为每篇文档选出若干 Top 句；
+- 汇总得到 evidence 列表供 RAG 使用和展示。
+
+### 10.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -848,7 +883,7 @@ from typing import List, Dict
 
 def sentence_split(text: str) -> List[str]:
     """
-    简单分句：
+    简单的分句函数：
     - 按句号/问号/感叹号等 split
     - 去掉空句
     """
@@ -866,6 +901,11 @@ def score_sentences(
 ) -> List[Dict]:
     """
     对单个文档中的句子进行打分，返回若干句子及其分数。
+    返回结构示例：
+    [
+      {"sentence": "...", "score": 0.9},
+      ...
+    ]
     """
     # TODO:
     # text = doc.get("text") or (doc.get("title","") + " " + doc.get("abstract",""))
@@ -879,7 +919,7 @@ def score_sentences(
     #       if overlap > 0:
     #           scored.append({"sentence": s, "score": float(overlap)})
     # elif method == "embedding":
-    #   # 可选：使用 embedding 模型计算相似度
+    #   # 可扩展为基于向量相似度的句级打分
     #   pass
     # scored_sorted = sorted(scored, key=lambda x: x["score"], reverse=True)
     # return scored_sorted[:max_sentences]
@@ -894,20 +934,23 @@ def select_evidence_for_docs(
 ) -> List[Dict]:
     """
     针对多个文档选取句级 evidence。
-    返回示例：
-    [{"id": doc_id, "title": title, "sentence": s, "score": 0.95}, ...]
+    返回结构示例：
+    [
+      {"id": doc_id, "title": title, "sentence": s, "score": 0.95},
+      ...
+    ]
     """
     evidences: List[Dict] = []
     # TODO:
     # for d in docs:
-    #     ss = score_sentences(query, d, max_sentences=per_doc)
-    #     for item in ss:
-    #         evidences.append({
-    #             "id": d.get("id"),
-    #             "title": d.get("title"),
-    #             "sentence": item["sentence"],
-    #             "score": item["score"],
-    #         })
+    #   ss = score_sentences(query, d, max_sentences=per_doc)
+    #   for item in ss:
+    #       evidences.append({
+    #         "id": d.get("id"),
+    #         "title": d.get("title"),
+    #         "sentence": item["sentence"],
+    #         "score": item["score"],
+    #       })
     # evidences_sorted = sorted(evidences, key=lambda x: x["score"], reverse=True)
     # return evidences_sorted[:max_total]
     pass
@@ -915,9 +958,14 @@ def select_evidence_for_docs(
 
 ---
 
-## 11. `src/rag.py` —— RAG 基础 & v4 增强
+## 11. `src/rag.py` —— RAG 基础与增强
 
-> 这里只给 RAG 关键骨架，假设你会复用 code3 中的 `LLMClient` 和基础 `answer`，在此基础上新增 `build_context_with_evidence` 与 `enhanced_answer`。
+### 11.1 要做什么
+
+- 提供基础 RAG 接口 `answer`：`retrieve + build_context + LLMClient.generate`；
+- 提供增强版 `enhanced_answer`：使用 `retrieve_enhanced` + 句级 evidence 构造上下文，并返回 evidence 列表。
+
+### 11.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -925,8 +973,8 @@ def select_evidence_for_docs(
 rag.py
 
 功能：
-- 基础 RAG 流程：检索 + 构造上下文 + 调用 LLM。
-- v4 增强版：使用 retrieve_enhanced + 句级 evidence 构造上下文，并返回 evidence。
+- 基础 RAG 流程：检索 + 拼接上下文 + 调用 LLM。
+- 增强版：结合 retrieve_enhanced + 句级 evidence 构造上下文，返回 evidence 信息。
 """
 
 import argparse
@@ -946,7 +994,7 @@ class LLMClient:
     """
 
     def __init__(self, provider: str, model: str, base_url: str = None, api_key: str = None, max_tokens: int = 512):
-        # TODO: 保存参数，并在非 mock 时初始化 OpenAI 客户端
+        # TODO: 保存 provider/model/max_tokens，必要时初始化 OpenAI 客户端
         pass
 
     def generate(self, system_prompt: str, user_prompt: str) -> str:
@@ -957,7 +1005,8 @@ class LLMClient:
         # if self.provider == "mock":
         #   return user_prompt[:100] + " ... [Mock Answer]"
         # else:
-        #   调 self.client.chat.completions.create(...)
+        #   resp = self.client.chat.completions.create(...)
+        #   return resp.choices[0].message.content
         pass
 
 
@@ -970,7 +1019,14 @@ def build_context(docs: List[Dict], max_chars: int) -> str:
     """
     基础版：使用文档的 title+abstract 拼接上下文。
     """
-    # TODO: 与 code3 类似
+    # TODO:
+    # context = ""
+    # for d in docs:
+    #   chunk = f"[{d['id']}] {d['title']}\n{d.get('abstract','')}\n\n---\n\n"
+    #   if len(context) + len(chunk) > max_chars:
+    #       break
+    #   context += chunk
+    # return context
     pass
 
 
@@ -982,9 +1038,9 @@ def build_context_with_evidence(
     使用句级 evidence 构造上下文。
     """
     # TODO:
-    # evidences_sorted = sorted(evidences, key=lambda x: x["score"], reverse=True)
+    # ev_sorted = sorted(evidences, key=lambda x: x["score"], reverse=True)
     # context = ""
-    # for e in evidences_sorted:
+    # for e in ev_sorted:
     #   chunk = f"[{e['id']}] {e['title']}\n{e['sentence']}\n\n---\n\n"
     #   if len(context) + len(chunk) > max_chars:
     #       break
@@ -1000,14 +1056,16 @@ def answer(
     config_path: str = "configs/config.yaml",
 ) -> Dict:
     """
-    基础版 RAG：使用 retrieve + build_context。
+    基础 RAG：使用 retrieve + build_context。
     """
     # TODO:
     # cfg = _load_config(config_path)
     # docs = retrieve(query, topk, mode, alpha=cfg["retrieval"]["alpha"], config_path=config_path)
     # context = build_context(docs, cfg["runtime"]["max_context_chars"])
-    # system_prompt / user_prompt 根据 context+query 设计
-    # client = LLMClient(...)
+    # system_prompt = "你是一个学术问答助手..."
+    # user_prompt = f"问题：{query}\n\n参考文献摘要：\n{context}\n\n请基于以上内容回答问题，并使用自然语言总结。"
+    # gen_cfg = cfg["generation"]
+    # client = LLMClient(gen_cfg["provider"], gen_cfg["model"], max_tokens=gen_cfg["max_tokens"])
     # ans = client.generate(system_prompt, user_prompt)
     # citations = [{"id": d["id"], "title": d["title"]} for d in docs]
     # return {"answer": ans, "citations": citations}
@@ -1021,10 +1079,11 @@ def enhanced_answer(
     config_path: str = "configs/config.yaml",
 ) -> Dict:
     """
-    v4 增强版 RAG：
+    增强版 RAG：
     - 使用 retrieve_enhanced 获取 docs
     - 句级 evidence 抽取
-    - 基于 evidence 构造上下文（或 fallback 到全文）
+    - 基于 evidence 或全文构造上下文
+    - 返回 answer + citations + evidence
     """
     # TODO:
     # cfg = _load_config(config_path)
@@ -1035,8 +1094,13 @@ def enhanced_answer(
     #   context = build_context_with_evidence(evidences, cfg["runtime"]["max_context_chars"])
     # else:
     #   context = build_context(docs, cfg["runtime"]["max_context_chars"])
-    # 构造 prompt + 调用 LLMClient（同 answer）
-    # 返回 {"answer": ..., "citations": ..., "evidence": evidences}
+    # system_prompt = "你是一个学术问答助手..."
+    # user_prompt = f"问题：{query}\n\n以下是相关论文的关键信息：\n{context}\n\n请回答问题，并尽量提及相关论文。"
+    # gen_cfg = cfg["generation"]
+    # client = LLMClient(gen_cfg["provider"], gen_cfg["model"], max_tokens=gen_cfg["max_tokens"])
+    # ans = client.generate(system_prompt, user_prompt)
+    # citations = [{"id": d["id"], "title": d["title"]} for d in docs]
+    # return {"answer": ans, "citations": citations, "evidence": evidences}
     pass
 
 
@@ -1069,7 +1133,13 @@ if __name__ == "__main__":
 
 ## 12. `src/synth_qa.py` —— 合成问答数据生成
 
-> 与 project3 一致，这里只给简要骨架（与 v4 兼容）。
+### 12.1 要做什么
+
+- 从 `clean.jsonl` 抽样论文；
+- 利用 LLM 或模板为每篇论文生成若干问题；
+- 写入 `synth_qa.jsonl`，用于检索评测。
+
+### 12.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -1091,7 +1161,10 @@ def _iter_clean_docs(clean_path: str):
     """
     生成器：逐行读取 clean.jsonl，yield 单篇文档字典。
     """
-    # TODO: yield json.loads(line)
+    # TODO:
+    # with open(clean_path, "r", encoding="utf-8") as f:
+    #   for line in f:
+    #       yield json.loads(line)
     pass
 
 
@@ -1099,7 +1172,8 @@ def _primary_category(categories: str) -> Optional[str]:
     """
     从 categories 字符串中取出第一个标签，比如 "cs.CL stat.ML" -> "cs.CL"。
     """
-    # TODO: return categories.split()[0] if categories else None
+    # TODO:
+    # return categories.split()[0] if categories else None
     pass
 
 
@@ -1111,15 +1185,16 @@ def generate_questions_for_doc(
 ) -> List[str]:
     """
     输入单篇论文的 title + abstract，调用 LLM 生成 n_q 个问题。
-    初期可用 mock 固定模板。
+    初期可用简单 mock 实现。
     """
     # TODO:
-    # 如果使用真实 LLM：
-    #   system_prompt = ...
-    #   user_prompt = ...
+    # 若使用真实 LLM：
+    #   system_prompt = "你是一个研究助教，请根据论文标题和摘要生成若干可被摘要回答的问题..."
+    #   user_prompt = f"标题: {title}\n摘要: {abstract}\n请生成 {n_q} 个问题，每行一个。"
     #   text = client.generate(system_prompt, user_prompt)
-    #   解析成若干问题列表
-    # 否则（mock）：
+    #   questions = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    #   return questions[:n_q]
+    # 若暂时不用 LLM，可先 mock：
     #   return [f"What is the main idea of paper: {title}?" for _ in range(n_q)]
     pass
 
@@ -1138,11 +1213,28 @@ def generate_synthetic_qa(
     """
     # TODO:
     # cfg = _load_config(config_path)
-    # client = LLMClient(...)
-    # 收集 docs 列表（可先全部加载或流式+随机采样）
-    # 对满足 category_filter 的 docs 进行抽样
-    # 对每篇调用 generate_questions_for_doc(...)
-    # 写入 {"q": q, "gold_ids": [id], "source": "synthetic_llm", "category": primary_category} 到 out_path
+    # gen_cfg = cfg["generation"]
+    # client = LLMClient(gen_cfg["provider"], gen_cfg["model"], max_tokens=gen_cfg["max_tokens"])
+    # docs = list(_iter_clean_docs(clean_path))
+    # 如果 category_filter 不为空，只保留主类别匹配的文档
+    # random.shuffle(docs)
+    # 取前 sample_size 篇
+    # count = 0
+    # with open(out_path, "w", encoding="utf-8") as f_out:
+    #   for rec in sampled_docs:
+    #       cat = _primary_category(rec.get("categories",""))
+    #       qs = generate_questions_for_doc(rec["title"], rec["abstract"], questions_per_doc, client)
+    #       for q in qs:
+    #           item = {
+    #             "q": q,
+    #             "gold_ids": [rec["id"]],
+    #             "source": "synthetic_llm",
+    #             "category": cat
+    #           }
+    #           json.dump(item, f_out, ensure_ascii=False)
+    #           f_out.write("\n")
+    #           count += 1
+    # return count
     pass
 
 
@@ -1159,7 +1251,7 @@ def main():
     parser.add_argument("--category", dest="category_filter", default=None)
     args = parser.parse_args()
 
-    # n = generate_synthetic_qa(...)
+    # n = generate_synthetic_qa(args.in_path, args.out_path, args.sample_size, args.questions_per_doc, args.category_filter)
     # print(f"Generated {n} QA pairs -> {args.out_path}")
     pass
 
@@ -1170,7 +1262,15 @@ if __name__ == "__main__":
 
 ---
 
-## 13. `src/eval.py` —— 离线评测（含 v4 扩展）
+## 13. `src/eval.py` —— 离线评测（含检索/生成/端到端延迟）
+
+### 13.1 要做什么
+
+- 在给定 QA 集上评测不同检索模式或策略组合；
+- 计算 Recall@k、MRR、平均检索时间、生成时间和端到端时间；
+- 将结果写入 CSV，方便后续制表和画图。
+
+### 13.2 伪代码骨架
 
 ```python
 #!/usr/bin/env python3
@@ -1178,7 +1278,7 @@ if __name__ == "__main__":
 eval.py
 
 功能：
-- 在 QA 集上评测 bm25/dense/hybrid（基础 / enhanced）模式：
+- 在 QA 集上评测 bm25/dense/hybrid 以及增强检索模式：
   - Recall@k、MRR
   - 平均检索时间 search_ms
   - 可选生成时间 gen_ms & 端到端时间 end2end_ms
@@ -1196,20 +1296,37 @@ from typing import List, Dict
 
 
 def _read_qa(path: str) -> List[Dict]:
+    """
+    读取 QA JSONL 文件，返回列表。
+    """
     items: List[Dict] = []
-    # TODO: 逐行读取 jsonl，append 到 items
+    # TODO:
+    # with open(path, "r", encoding="utf-8") as f:
+    #   for line in f:
+    #       line = line.strip()
+    #       if not line: continue
+    #       items.append(json.loads(line))
+    # return items
     pass
 
 
 def _recall_at_k(retrieved: List[str], gold: List[str]) -> float:
-    # TODO: return 1.0 if set(retrieved) ∩ set(gold) else 0.0
+    """
+    Recall@k 的单样本版本：命中则为 1，否则为 0。
+    """
+    # TODO:
+    # return 1.0 if set(retrieved) & set(gold) else 0.0
     pass
 
 
 def _mrr_at_k(retrieved: List[str], gold: List[str]) -> float:
+    """
+    MRR 的单样本版本：第一个命中的倒数排名。
+    """
     # TODO:
     # for i, rid in enumerate(retrieved):
-    #   if rid in gold: return 1.0 / (i+1)
+    #   if rid in gold:
+    #       return 1.0 / (i+1)
     # return 0.0
     pass
 
@@ -1231,41 +1348,46 @@ def evaluate(
     # for mode in modes:
     #   recalls, mrrs, search_times, gen_times, end2end_times = [], [], [], [], []
     #   for item in qa_items:
-    #       q = item["q"]; gold = item["gold_ids"]
+    #       q = item.get("q") or ""
+    #       gold = item.get("gold_ids") or []
     #       t0 = time.perf_counter()
     #       if use_enhanced:
     #           docs = retrieve_enhanced(q, k, mode)
     #       else:
     #           docs = retrieve(q, k, mode)
     #       t1 = time.perf_counter()
-    #       ids = [d["id"] for d in docs]
+    #       ids = [d.get("id") for d in docs]
     #       recalls.append(_recall_at_k(ids, gold))
     #       mrrs.append(_mrr_at_k(ids, gold))
-    #       search_times.append((t1 - t0) * 1000)
+    #       search_ms = (t1 - t0) * 1000.0
+    #       search_times.append(search_ms)
+    #       gen_ms = 0.0
     #       if include_gen:
-    #           t2 = time.perf_counter()
+    #           g0 = time.perf_counter()
     #           if use_enhanced:
     #               _ = enhanced_answer(q, mode, k)
     #           else:
     #               _ = answer(q, mode, k)
-    #           t3 = time.perf_counter()
-    #           gen_times.append((t3 - t2) * 1000)
-    #           end2end_times.append((t3 - t0) * 1000)
+    #           g1 = time.perf_counter()
+    #           gen_ms = (g1 - g0) * 1000.0
+    #       gen_times.append(gen_ms)
+    #       end2end_times.append(search_ms + gen_ms)
     #   row = {
     #     "mode": mode,
     #     "k": k,
-    #     "recall": mean(recalls) if recalls else 0.0,
-    #     "mrr": mean(mrrs) if mrrs else 0.0,
-    #     "search_ms": mean(search_times) if search_times else 0.0,
-    #     "gen_ms": mean(gen_times) if gen_times else 0.0,
-    #     "end2end_ms": mean(end2end_times) if end2end_times else 0.0,
+    #     "recall": round(mean(recalls), 4) if recalls else 0.0,
+    #     "mrr": round(mean(mrrs), 4) if mrrs else 0.0,
+    #     "search_ms": round(mean(search_times), 2) if search_times else 0.0,
+    #     "gen_ms": round(mean(gen_times), 2) if gen_times else 0.0,
+    #     "end2end_ms": round(mean(end2end_times), 2) if end2end_times else 0.0,
     #   }
     #   rows.append(row)
     #
     # with open(out_csv, "w", newline="", encoding="utf-8") as f:
     #   writer = csv.DictWriter(f, fieldnames=["mode","k","recall","mrr","search_ms","gen_ms","end2end_ms"])
     #   writer.writeheader()
-    #   for r in rows: writer.writerow(r)
+    #   for r in rows:
+    #       writer.writerow(r)
     pass
 
 
@@ -1294,13 +1416,11 @@ if __name__ == "__main__":
 
 ---
 
-## 14. 从 0 开始的测试流程 v4（基础 + 创新点消融）
+## 14. 从 0 开始的测试与消融流程（概要）
 
-> 完整测试建议拆两层：  
-> - 基础功能：确保所有文件“跑得通”；  
-> - 创新模块：每个开关的 ablation 实验。
+> 这一节在 `test4` 文档中已经详细展开，这里简要列出关键命令与思路，方便你确认实现是否完整。
 
-### 14.1 基础测试（类似 test3，但直接写在这里）
+### 14.1 基础功能测试（mini 数据）
 
 1. **预处理 mini 数据**
 
@@ -1309,10 +1429,11 @@ python src/ingest.py \
   --in ./data/mini_raw.jsonl \
   --out ./data/clean.jsonl \
   --max_rows 100
+
 head -n 3 ./data/clean.jsonl
 ```
 
-2. **BM25 索引构建 + 简单查询**
+2. **BM25 索引 + 查询**
 
 ```bash
 python src/index_bm25.py \
@@ -1323,7 +1444,7 @@ python -c "from src.index_bm25 import search_bm25; \
 print(search_bm25('./data/bm25.idx', 'contrastive learning', 2))"
 ```
 
-3. **稠密向量索引 + 查询**
+3. **稠密索引 + 查询**
 
 ```bash
 python src/index_dense.py \
@@ -1335,7 +1456,7 @@ python -c "from src.index_dense import search_dense; \
 print(search_dense('./data/chroma', 'graph neural networks', 2, 'bge-small-en-v1.5'))"
 ```
 
-4. **基础检索 `retrieve`**
+4. **基础检索接口**
 
 ```bash
 python -c "from src.retriever import retrieve; \
@@ -1344,189 +1465,46 @@ print(retrieve('graph neural networks', 3, mode='dense')); \
 print(retrieve('transformer architectures', 3, mode='hybrid'))"
 ```
 
-5. **RAG 基础版 `answer`（mock）**
-
-配置中：
-
-```yaml
-generation:
-  provider: mock
-```
-
-命令：
+5. **基础 RAG 答案（mock）**
 
 ```bash
 python -c "from src.rag import answer; \
 print(answer('What is contrastive learning?', mode='hybrid', topk=3))"
 ```
 
-预期返回 dict，有 `answer` 和 `citations`。
-
-6. **合成 QA**
+### 14.2 合成 QA 与基础评测
 
 ```bash
 python src/synth_qa.py \
   --in ./data/clean.jsonl \
   --out ./data/synth_qa.jsonl \
-  --sample_size 3 \
+  --sample_size 50 \
   --questions_per_doc 1
 
-head -n 5 ./data/synth_qa.jsonl
-```
-
-7. **评测基础版（v3 风格）**
-
-```bash
 python src/eval.py \
   --qa ./data/synth_qa.jsonl \
   --modes bm25 dense hybrid \
-  --out ./logs/metrics_v3_baseline.csv \
+  --out ./logs/metrics_baseline.csv \
   --k 5
 
-cat ./logs/metrics_v3_baseline.csv
+cat ./logs/metrics_baseline.csv
 ```
 
-### 14.2 v4 新模块单独测试（见上一条回答中的所有 `python -c` / `python - << EOF` 片段）
+### 14.3 增强模块与消融实验（示例命令）
 
-- `heuristics.classify_query / choose_strategy`；
-- `reranker.rerank`；
-- `expansion.expand_query`；
-- `snippets.sentence_split / score_sentences / select_evidence_for_docs`；
-- `retrieve_enhanced`；
-- `enhanced_answer`。
+- 动态 alpha：比较 `dynamic_alpha=false` vs `true` 对 `hybrid` 的影响；
+- Rerank：比较 `rerank.enable=false` vs `true`；
+- Query Expansion：比较 `expansion.enable=false` / `PRF-only` / `PRF+LLM`；
+- Evidence：比较 `rag.use_evidence_snippets=false` vs `true`；
+- Category：比较类别过滤开关；
+- SLA：设置不同的 `latency_budget_ms` 并比较 `end2end_ms` 与 `recall/mrr`。
 
-### 14.3 v4 增强端到端 + 消融实验（核心命令一览）
+每个消融只需：
 
-假设：
+1. 修改 `config.yaml` 中对应开关；  
+2. 运行一次 `eval.py` 输出到不同的 CSV；  
+3. 对比各 CSV 中的指标，即可在报告/展示中引用。
 
-- 将所有评测结果分别输出到不同 CSV 中，便于对比。
+---
 
-1. **动态 alpha：off vs on**
-
-```bash
-# dynamic_alpha = false
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_dynamic_alpha_off.csv \
-  --k 5
-
-# dynamic_alpha = true
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_dynamic_alpha_on.csv \
-  --k 5 \
-  --use_enhanced
-```
-
-2. **Rerank：off vs on**
-
-```bash
-# rerank.enable = false
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_rerank_off.csv \
-  --k 5 \
-  --use_enhanced
-
-# rerank.enable = true
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_rerank_on.csv \
-  --k 5 \
-  --use_enhanced
-```
-
-3. **Query Expansion：off / PRF / PRF+LLM**
-
-```bash
-# expansion.enable = false
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_expansion_off.csv \
-  --k 10 \
-  --use_enhanced
-
-# expansion.enable = true, llm.enable = false
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_expansion_prf.csv \
-  --k 10 \
-  --use_enhanced
-
-# expansion.enable = true, llm.enable = true
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_expansion_prf_llm.csv \
-  --k 10 \
-  --use_enhanced
-```
-
-4. **Evidence 高亮：off vs on**
-
-```bash
-# rag.use_evidence_snippets = false
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_evidence_off.csv \
-  --k 5 \
-  --include_gen \
-  --use_enhanced
-
-# rag.use_evidence_snippets = true
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_evidence_on.csv \
-  --k 5 \
-  --include_gen \
-  --use_enhanced
-```
-
-5. **类别感知：off vs on**
-
-```bash
-# category.enable_filter = false, enable_boost = false
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_category_off.csv \
-  --k 5 \
-  --use_enhanced
-
-# category.enable_filter = true, enable_boost = true
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_category_on.csv \
-  --k 5 \
-  --use_enhanced
-```
-
-6. **SLA：不同延迟预算**
-
-```bash
-# runtime.latency_budget_ms = 300 / 800 / 1500 各跑一次
-python src/eval.py \
-  --qa ./data/synth_qa.jsonl \
-  --modes hybrid \
-  --out ./logs/ablation_sla_300ms.csv \
-  --k 5 \
-  --include_gen \
-  --use_enhanced
-```
-
-通过对比这些 CSV 中的 `recall/mrr/search_ms/gen_ms/end2end_ms`，以及手动打印部分 `enhanced_answer` 的 `evidence` 列表，你就能完整展示：
-
-- 从 0 搭建的基础 RAG 系统是可用的；
-- 每个 v4 创新点（动态 alpha / rerank / expansion / evidence / category / SLA）都能被独立打开/关闭；
-- 并且可以用“消融实验”的方式，观察它们对检索效果与延迟的具体影响。
-
-```
+这样，这个 `code4` 文档就从 0 描述了整个项目的实现步骤、各模块伪代码骨架以及测试/消融思路，不依赖任何“v3 基础”叙述，作为一个独立项目的实现指南即可。
