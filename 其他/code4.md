@@ -65,6 +65,7 @@ rank-bm25
 chromadb
 sentence-transformers
 openai
+python-dotenv   # 用于从 .env 自动加载 OPENAI_API_KEY / OPENAI_BASE_URL
 # 如需交互式测试，可加：ipython / jupyter（可选）
 ```
 
@@ -129,9 +130,15 @@ rag:
     method: bm25       # 句级打分方式：bm25 | embedding
 
 generation:
-  provider: mock       # mock | openai | ollama
-  model: gpt-4o-mini
+  provider: mock           # mock | openai | ollama（或其他 OpenAI 兼容服务）
+  model: gpt-4.1-mini      # 示例：OpenAI 官方模型名，可按需要修改
   max_tokens: 512
+
+  # 使用真实 LLM 时的说明（代码里会从环境变量读取）：
+  # - OPENAI_API_KEY  : 必填，你的 API Key
+  # - OPENAI_BASE_URL : 选填，OpenAI 兼容服务地址
+  #   - 官方 OpenAI 可设为: https://api.openai.com/v1
+  #   - 其他厂商按其文档填写
 
 category:
   enable_filter: false
@@ -982,9 +989,13 @@ from typing import List, Dict
 
 # import yaml
 # from openai import OpenAI
+# from dotenv import load_dotenv
 # from .retriever import retrieve, retrieve_enhanced
 # from .snippets import select_evidence_for_docs
 
+# 加载项目根目录 .env 中的 OPENAI_API_KEY / OPENAI_BASE_URL
+# 建议在真实实现中取消注释：
+# load_dotenv()
 
 class LLMClient:
     """
@@ -1472,6 +1483,45 @@ python -c "from src.rag import answer; \
 print(answer('What is contrastive learning?', mode='hybrid', topk=3))"
 ```
 
+> 如果此时 `configs/config.yaml` 中 `generation.provider: mock`，
+> 上面的命令会走 mock 模式，不会发真实网络请求，只用于验证检索和上下文构建逻辑。
+
+#### 14.1 补充：切换为真实 OpenAI / 兼容 API（使用 .env 管理 Key）
+
+1. **在 `configs/config.yaml` 中修改 `generation` 配置**
+
+   ```yaml
+   generation:
+     provider: openai           # 从 mock 改成 openai
+     model: gpt-4.1-mini        # 或你的 OpenAI 兼容模型名
+     max_tokens: 512
+
+2. 在项目根目录 5020-RAG/ 创建 .env 文件 文件路径示例：
+    5020-RAG/
+    ├── .env
+    ├── configs/
+    ├── src/
+    └── ...
+    .env 内容示例：
+    OPENAI_API_KEY=sk-xxxxxx_your_key
+    OPENAI_BASE_URL=https://api.openai.com/v1
+    OPENAI_API_KEY：必填，你的 API Key
+    OPENAI_BASE_URL：可改成你使用的 OpenAI 兼容服务地址
+    确保代码会加载 .env
+    在 requirements.txt 中已经包含 python-dotenv；
+    在 src/rag.py 的真实实现里，按照本文件第 11 节伪代码，在文件顶部调用：
+
+    from dotenv import load_dotenv
+    load_dotenv()
+    这样程序启动时会自动把 .env 中的 OPENAI_API_KEY / OPENAI_BASE_URL 注入到环境变量，供 LLMClient 通过 os.getenv 读取。
+    再次运行基础 RAG 测试命令
+    bash
+    python -c "from src.rag import answer; \
+    print(answer('What is contrastive learning?', mode='hybrid', topk=3))"
+    此时：
+    检索模块使用本地 BM25 / 稠密索引找到相关摘要；
+    LLMClient 使用 .env 中的 Key 调用真实的 OpenAI / 兼容 LLM；
+    终端输出的是“真实模型生成的答案 + 引用论文列表”。
 ### 14.2 合成 QA 与基础评测
 
 ```bash
