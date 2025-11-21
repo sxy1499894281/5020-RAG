@@ -1,0 +1,2 @@
+mode,k,recall,mrr,search_ms,gen_ms,end2end_ms
+hybrid,5,1.0,1.0,3760.76,3569.98,7330.74

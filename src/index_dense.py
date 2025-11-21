@@ -73,7 +73,7 @@ def embed_and_build_vector_db(
 ) -> int:
     """从 clean.jsonl 构建稠密向量库，返回写入的文档数量。"""
     client = chromadb.PersistentClient(path=db_path)
-    col = client.get_or_create_collection(collection_name=collection)
+    col = client.get_or_create_collection(name=collection)
 
     docs = _load_docs(clean_path)
     if not docs:
@@ -109,11 +109,16 @@ def search_dense(
 ) -> List[Dict]:
     """用稠密向量检索 query，返回 Top-k 文档：[{id,title,text,categories,score}]。"""
     client = chromadb.PersistentClient(path=db_path)
-    col = client.get_collection(collection_name=collection)
+    col = client.get_collection(name=collection)
 
     model = SentenceTransformer(model_name)
     q_emb = model.encode([query], normalize_embeddings=True)
-    result = col.query(query_embeddings=q_emb, n_results=max(1, topk), include=["ids", "metadatas", "documents", "distances"])  # type: ignore
+    # chromadb 新版本中 include 不再允许 "ids"，但返回结果仍然包含 ids 字段
+    result = col.query(
+        query_embeddings=q_emb,
+        n_results=max(1, topk),
+        include=["metadatas", "documents", "distances"],
+    )  # type: ignore
 
     docs: List[Dict] = []
     ids = result.get("ids", [[]])[0]

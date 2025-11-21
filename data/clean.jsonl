@@ -1,0 +1,3 @@
+{"id": "0704.0001", "title": "An Example Paper Title", "abstract": "We propose an approach to contrastive learning for graphs.", "categories": "cs.LG cs.AI", "created": "Mon, 2 Apr 2007 12:00:00 GMT"}
+{"id": "2101.12345", "title": "Neural Retrieval with BM25 and Dense Vectors", "abstract": "We compare BM25 with dense retrievers in academic QA.", "categories": "cs.IR cs.CL", "created": "Fri, 8 Jan 2021 10:00:00 GMT"}
+{"id": "1806.01234", "title": "A Survey on RAG Systems", "abstract": "Retrieval-Augmented Generation combines retrievers with generators.", "categories": "cs.CL", "created": "Tue, 5 Jun 2018 09:00:00 GMT"}

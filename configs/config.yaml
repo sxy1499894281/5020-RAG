@@ -8,7 +8,7 @@ bm25:
 dense:
   db: ./data/chroma
   provider: chroma
-  model: bge-small-en-v1.5
+  model: BAAI/bge-small-en-v1.5
   collection: arxiv
 
 retrieval:
@@ -17,7 +17,7 @@ retrieval:
   alpha: 0.5           # 初始固定 alpha
   dynamic_alpha: true  # 是否启用自适应 alpha
   expansion:
-    enable: false      # 查询扩展总开关
+    enable: true      # 查询扩展总开关
     prf:
       enable: true
       m_docs: 5
@@ -27,7 +27,7 @@ retrieval:
       n_variants: 3
 
 rerank:
-  enable: false
+  enable: true
   model: bge-reranker-base
   topn: 50
   batch_size: 16
@@ -51,7 +51,7 @@ generation:
   #   - 其他厂商按其文档填写
 
 category:
-  enable_filter: false
+  enable_filter: true
   allowed_prefixes: ["cs."]
   enable_boost: true
   boost_factor: 0.1
