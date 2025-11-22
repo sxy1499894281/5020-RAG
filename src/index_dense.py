@@ -111,7 +111,7 @@ def search_dense(
     client = chromadb.PersistentClient(path=db_path)
     col = client.get_collection(name=collection)
 
-    model = SentenceTransformer(model_name)
+    model = SentenceTransformer(model_name, device="cuda")
     q_emb = model.encode([query], normalize_embeddings=True)
     # chromadb 新版本中 include 不再允许 "ids"，但返回结果仍然包含 ids 字段
     result = col.query(

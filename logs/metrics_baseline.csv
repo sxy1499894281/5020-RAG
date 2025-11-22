@@ -1,0 +1,2 @@
+mode_second,k_second,recall_second,mrr_second,search_ms_second,gen_ms_second,end2end_ms_second
+hybrid,5,0.8794,0.8276,14915.5,0.0,14915.5

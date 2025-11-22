@@ -17,9 +17,9 @@ retrieval:
   alpha: 0.5           # 初始固定 alpha
   dynamic_alpha: true  # 是否启用自适应 alpha
   expansion:
-    enable: true      # 查询扩展总开关
+    enable: false      # 查询扩展总开关
     prf:
-      enable: true
+      enable: false
       m_docs: 5
       top_terms: 10
     llm:
@@ -27,21 +27,21 @@ retrieval:
       n_variants: 3
 
 rerank:
-  enable: true
+  enable: false
   model: bge-reranker-base
   topn: 50
   batch_size: 16
 
 rag:
-  use_evidence_snippets: true
+  use_evidence_snippets: false
   evidence:
     per_doc: 2
     max_total: 10
     method: bm25       # 句级打分方式：bm25 | embedding
 
 generation:
-  provider: mock           # mock | openai | ollama（或其他 OpenAI 兼容服务）
-  model: gpt-4.1-mini      # 示例：OpenAI 官方模型名，可按需要修改
+  provider: openai           # mock | openai | ollama（或其他 OpenAI 兼容服务）
+  model:  Qwen 8B      # 示例：OpenAI 官方模型名，可按需要修改
   max_tokens: 512
 
   # 使用真实 LLM 时的说明（代码里会从环境变量读取）：
@@ -51,9 +51,9 @@ generation:
   #   - 其他厂商按其文档填写
 
 category:
-  enable_filter: true
+  enable_filter: false
   allowed_prefixes: ["cs."]
-  enable_boost: true
+  enable_boost: false
   boost_factor: 0.1
 
 runtime:
