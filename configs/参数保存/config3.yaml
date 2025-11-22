@@ -12,7 +12,7 @@ dense:
   collection: arxiv
 
 retrieval:
-  mode: bm25
+  mode: hybrid
   topk: 5
   alpha: 0.5           # 初始固定 alpha
   dynamic_alpha: false  # 是否启用自适应 alpha
@@ -27,7 +27,7 @@ retrieval:
       n_variants: 3
 
 rerank:
-  enable: false
+  enable: true
   model: bge-reranker-base
   topn: 50
   batch_size: 16
