@@ -1542,7 +1542,7 @@ cat ./logs/metrics_baseline.csv
 
 ### 14.3 增强模块与消融实验（示例命令）
 
-- 动态 alpha：比较 `dynamic_alpha=false` vs `true` 对 `hybrid` 的影响；
+- 混合检索：比较 `mode=bm25` vs `mode=hybrid` 的影响；
 - Rerank：比较 `rerank.enable=false` vs `true`；
 - Query Expansion：比较 `expansion.enable=false` / `PRF-only` / `PRF+LLM`；
 - Evidence：比较 `rag.use_evidence_snippets=false` vs `true`；

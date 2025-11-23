@@ -23,12 +23,12 @@ retrieval:
       m_docs: 5
       top_terms: 10
     llm:
-      enable: false    # 初期可关掉 LLM 改写
+      enable: true    # 初期可关掉 LLM 改写
       n_variants: 3
 
 rerank:
   enable: true
-  model: bge-reranker-base
+  model: BAAI/bge-reranker-base
   topn: 50
   batch_size: 16
 

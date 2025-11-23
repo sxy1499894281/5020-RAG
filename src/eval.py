@@ -97,12 +97,24 @@ def evaluate(
     rows = []
     for mode in modes:
         recalls, mrrs, search_times, gen_times, end2end_times = [], [], [], [], []
+        # 如果使用增强模式，读取config配置
+        cfg_rerank = False
+        cfg_expansion = False
+        cfg_dynamic_alpha = False
+        if use_enhanced:
+            import yaml
+            with open("configs/config.yaml", encoding="utf-8") as cf:
+                cfg = yaml.safe_load(cf)
+            cfg_rerank = cfg.get("rerank", {}).get("enable", False)
+            cfg_expansion = cfg.get("retrieval", {}).get("expansion", {}).get("enable", False)
+            cfg_dynamic_alpha = cfg.get("retrieval", {}).get("dynamic_alpha", False)
+        
         for item in qa_items:
             q = item.get("q") or ""
             gold = item.get("gold_ids") or []
             t0 = time.perf_counter()
             if use_enhanced:
-                docs = retrieve_enhanced(q, k, mode)
+                docs = retrieve_enhanced(q, k, mode, use_dynamic_alpha=cfg_dynamic_alpha, enable_expansion=cfg_expansion, enable_rerank=cfg_rerank)
             else:
                 docs = retrieve(q, k, mode)
             t1 = time.perf_counter()

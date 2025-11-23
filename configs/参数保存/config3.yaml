@@ -28,7 +28,7 @@ retrieval:
 
 rerank:
   enable: true
-  model: bge-reranker-base
+  model: BAAI/bge-reranker-base
   topn: 50
   batch_size: 16
 
