@@ -1,0 +1,2 @@
+mode_dense,k_dense,recall_dense,mrr_dense,search_ms_dense,gen_ms_dense,end2end_ms_dense
+dense,5,0.8492,0.7693,6210.55,0.0,6210.55

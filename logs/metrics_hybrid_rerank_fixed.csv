@@ -1,2 +1,2 @@
 mode_third,k_third,recall_third,mrr_third,search_ms_third,gen_ms_third,end2end_ms_third
-hybrid,5,0.9045,0.8436,11758.41,0.0,11758.41
+hybrid,5,0.8995,0.8416,11758.41,0.0,11758.41
